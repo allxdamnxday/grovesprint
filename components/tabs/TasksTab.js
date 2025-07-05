@@ -8,6 +8,8 @@ import Badge from '@/components/ui/Badge'
 import PriorityDot from '@/components/ui/PriorityDot'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import CSVUploadModal from '@/components/ui/CSVUploadModal'
+import MobileCard, { MobileCardHeader, MobileCardRow } from '@/components/ui/MobileCard'
+import ResponsiveTable from '@/components/ui/ResponsiveTable'
 
 // Custom hook for handling input with local state
 function useEditableField(initialValue, onSave) {
@@ -294,6 +296,84 @@ export default function TasksTab() {
     )
   }
 
+  // Task card component for mobile view
+  const TaskCard = ({ task }) => {
+    const taskNameField = useEditableField(task.task, (value) => 
+      updateTask(task.id, { task: value })
+    )
+    
+    const notesField = useEditableField(task.notes || '', (value) => 
+      updateTask(task.id, { notes: value })
+    )
+
+    return (
+      <MobileCard onDelete={() => deleteTask(task.id)}>
+        <MobileCardHeader
+          title={
+            <Input
+              {...taskNameField}
+              variant="minimal"
+              className="font-semibold text-gray-900 -mx-2 px-2"
+            />
+          }
+          badge={
+            <Badge variant={task.status === 'completed' ? 'success' : 'warning'} size="sm">
+              {task.status}
+            </Badge>
+          }
+          priority={<PriorityDot priority={task.priority} />}
+        />
+        
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              checked={task.completed}
+              onChange={(e) => updateTask(task.id, { completed: e.target.checked })}
+              className="w-5 h-5 text-green-600 rounded focus:ring-2 focus:ring-green-500 cursor-pointer"
+            />
+            <span className="text-sm text-gray-600">Mark as complete</span>
+          </div>
+          
+          <MobileCardRow 
+            label="Due Date" 
+            value={
+              <input
+                type="date"
+                value={task.due_date || ''}
+                onChange={(e) => updateTask(task.id, { due_date: e.target.value })}
+                className="px-2 py-1 border border-gray-300 rounded-md text-sm"
+              />
+            } 
+          />
+          
+          <MobileCardRow 
+            label="Priority" 
+            value={
+              <Select
+                value={task.priority}
+                onChange={(e) => updateTask(task.id, { priority: e.target.value })}
+                options={priorityOptions}
+                variant="minimal"
+                className="text-sm"
+              />
+            } 
+          />
+          
+          <div className="pt-2">
+            <label className="text-sm text-gray-600 block mb-1">Notes</label>
+            <Input
+              {...notesField}
+              placeholder="Add notes..."
+              variant="filled"
+              className="text-sm w-full"
+            />
+          </div>
+        </div>
+      </MobileCard>
+    )
+  }
+
   const handleCSVImport = async (validTasks) => {
     try {
       // Bulk insert tasks
@@ -318,16 +398,18 @@ export default function TasksTab() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-3xl font-bold text-gray-900">Launch Tasks & Timeline</h2>
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Launch Tasks & Timeline</h2>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
           <Button
             variant="secondary"
             onClick={() => setShowCSVModal(true)}
+            size="sm"
+            className="sm:size-base"
           >
             📤 Import CSV
           </Button>
-          <div className="text-sm font-medium flex items-center gap-2">
+          <div className="text-xs sm:text-sm font-medium flex items-center gap-2">
             <span className={subscription ? 'text-green-600' : 'text-red-600'}>
               {subscription ? '🟢' : '🔴'}
             </span>
@@ -339,15 +421,15 @@ export default function TasksTab() {
       </div>
 
       {weeks.map((week) => (
-        <div key={week.number} className="mb-8">
-          <div className="bg-gradient-to-r from-green-700 to-green-600 text-white p-5 rounded-xl mb-4 shadow-md">
-            <h3 className="text-xl font-bold">{week.title}</h3>
+        <div key={week.number} className="mb-6 sm:mb-8">
+          <div className="bg-gradient-to-r from-green-700 to-green-600 text-white p-4 sm:p-5 rounded-xl mb-3 sm:mb-4 shadow-md">
+            <h3 className="text-lg sm:text-xl font-bold">{week.title}</h3>
           </div>
 
           {Object.entries(groupedTasks[week.number] || {}).map(([day, dayTasks]) => (
-            <div key={day} className="bg-white p-6 mb-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex justify-between items-center mb-4">
-                <h4 className="font-bold text-lg text-gray-900">{day}</h4>
+            <div key={day} className="bg-white p-4 sm:p-6 mb-3 sm:mb-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-0 mb-4">
+                <h4 className="font-bold text-base sm:text-lg text-gray-900">{day}</h4>
                 <Button
                   size="sm"
                   onClick={() => addTask(week.number, day)}
@@ -356,34 +438,36 @@ export default function TasksTab() {
                 </Button>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b-2 border-gray-200">
-                      <th className="text-left p-3 w-10 text-gray-700 font-semibold">✓</th>
-                      <th className="text-left p-3 text-gray-700 font-semibold">Task</th>
-                      <th className="text-left p-3 w-32 text-gray-700 font-semibold">Due Date</th>
-                      <th className="text-left p-3 w-28 text-gray-700 font-semibold">Priority</th>
-                      <th className="text-left p-3 w-32 text-gray-700 font-semibold">Status</th>
-                      <th className="text-left p-3 text-gray-700 font-semibold">Notes</th>
-                      <th className="text-left p-3 w-20 text-gray-700 font-semibold">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {dayTasks.map((task) => (
-                      <TaskRow key={task.id} task={task} />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <ResponsiveTable
+                mobileView={dayTasks.map((task) => (
+                  <TaskCard key={task.id} task={task} />
+                ))}
+              >
+                <thead>
+                  <tr className="border-b-2 border-gray-200">
+                    <th className="text-left p-3 w-10 text-gray-700 font-semibold">✓</th>
+                    <th className="text-left p-3 text-gray-700 font-semibold">Task</th>
+                    <th className="text-left p-3 w-32 text-gray-700 font-semibold">Due Date</th>
+                    <th className="text-left p-3 w-28 text-gray-700 font-semibold">Priority</th>
+                    <th className="text-left p-3 w-32 text-gray-700 font-semibold">Status</th>
+                    <th className="text-left p-3 text-gray-700 font-semibold">Notes</th>
+                    <th className="text-left p-3 w-20 text-gray-700 font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {dayTasks.map((task) => (
+                    <TaskRow key={task.id} task={task} />
+                  ))}
+                </tbody>
+              </ResponsiveTable>
             </div>
           ))}
 
           {/* Add initial day group if week has no tasks */}
           {!groupedTasks[week.number] && (
-            <div className="bg-white p-8 mb-4 rounded-xl border-2 border-dashed border-gray-300">
-              <div className="text-center py-4">
-                <p className="text-gray-600 mb-3 text-lg">No tasks for this week yet</p>
+            <div className="bg-white p-6 sm:p-8 mb-3 sm:mb-4 rounded-xl border-2 border-dashed border-gray-300">
+              <div className="text-center py-2 sm:py-4">
+                <p className="text-gray-600 mb-3 text-base sm:text-lg">No tasks for this week yet</p>
                 <Button
                   size="sm"
                   onClick={() => addTask(week.number, `Day ${(week.number - 1) * 7 + 1}-${(week.number - 1) * 7 + 2}`)}

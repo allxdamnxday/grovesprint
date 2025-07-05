@@ -154,3 +154,151 @@ input, select, textarea, button {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--gray-500);
 }
+
+/* Mobile-first utilities */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Touch-friendly tap targets */
+@media (max-width: 768px) {
+  button, a, input, select, textarea {
+    min-height: 44px;
+  }
+}
+
+/* Responsive typography */
+.text-responsive-xs {
+  font-size: clamp(0.75rem, 2vw, 0.875rem);
+}
+
+.text-responsive-sm {
+  font-size: clamp(0.875rem, 2.5vw, 1rem);
+}
+
+.text-responsive-base {
+  font-size: clamp(1rem, 3vw, 1.125rem);
+}
+
+.text-responsive-lg {
+  font-size: clamp(1.125rem, 3.5vw, 1.25rem);
+}
+
+.text-responsive-xl {
+  font-size: clamp(1.25rem, 4vw, 1.5rem);
+}
+
+.text-responsive-2xl {
+  font-size: clamp(1.5rem, 5vw, 2rem);
+}
+
+.text-responsive-3xl {
+  font-size: clamp(1.875rem, 6vw, 2.5rem);
+}
+
+.text-responsive-4xl {
+  font-size: clamp(2.25rem, 7vw, 3rem);
+}
+
+/* Mobile card styles */
+.mobile-card {
+  @apply bg-white rounded-lg p-4 shadow-sm border border-gray-200;
+}
+
+.mobile-card-header {
+  @apply font-semibold text-gray-900 mb-2;
+}
+
+.mobile-card-body {
+  @apply space-y-2 text-sm;
+}
+
+.mobile-card-row {
+  @apply flex justify-between items-center py-1;
+}
+
+.mobile-card-label {
+  @apply text-gray-600;
+}
+
+.mobile-card-value {
+  @apply font-medium text-gray-900;
+}
+
+/* Responsive containers */
+.container-mobile {
+  @apply px-4 sm:px-6 lg:px-8;
+}
+
+.padding-mobile {
+  @apply p-4 sm:p-6 lg:p-8;
+}
+
+/* Mobile navigation styles */
+.mobile-nav-scroll {
+  @apply flex overflow-x-auto gap-2 pb-2 -mx-4 px-4 scrollbar-hide;
+}
+
+.mobile-nav-indicator {
+  @apply h-1 w-full bg-gray-200 rounded-full mt-2;
+}
+
+.mobile-nav-indicator-active {
+  @apply bg-green-600;
+}
+
+/* Responsive table utilities */
+@media (max-width: 640px) {
+  .table-mobile-card {
+    display: block;
+  }
+  
+  .table-mobile-card thead {
+    display: none;
+  }
+  
+  .table-mobile-card tbody {
+    display: block;
+  }
+  
+  .table-mobile-card tr {
+    display: block;
+    margin-bottom: 1rem;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    padding: 1rem;
+    background: white;
+  }
+  
+  .table-mobile-card td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border: none;
+  }
+  
+  .table-mobile-card td:before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--gray-600);
+    margin-right: 1rem;
+  }
+}
+
+/* Swipe gestures support */
+.swipe-container {
+  touch-action: pan-y;
+}
+
+/* Mobile modal adjustments */
+@media (max-width: 640px) {
+  .modal-mobile {
+    @apply fixed inset-x-0 bottom-0 rounded-t-xl max-h-[90vh];
+  }
+}

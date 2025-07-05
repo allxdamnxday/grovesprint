@@ -4,6 +4,8 @@ import toast from 'react-hot-toast'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import { TableSkeleton } from '@/components/ui/Skeleton'
+import MobileCard, { MobileCardHeader, MobileCardRow } from '@/components/ui/MobileCard'
+import ResponsiveTable from '@/components/ui/ResponsiveTable'
 
 // Custom hook for handling input with local state
 function useEditableField(initialValue, onSave, type = 'text') {
@@ -284,12 +286,116 @@ export default function BudgetTab() {
     )
   }
 
+  // Budget card component for mobile view
+  const BudgetCard = ({ item }) => {
+    const categoryField = useEditableField(item.category, (value) => 
+      updateBudgetItem(item.id, { category: value })
+    )
+    
+    const itemField = useEditableField(item.item, (value) => 
+      updateBudgetItem(item.id, { item: value })
+    )
+    
+    const budgetedField = useEditableField(item.budgeted || 0, (value) => 
+      updateBudgetItem(item.id, { budgeted: value }), 'number'
+    )
+    
+    const actualField = useEditableField(item.actual || 0, (value) => 
+      updateBudgetItem(item.id, { actual: value }), 'number'
+    )
+    
+    const notesField = useEditableField(item.notes || '', (value) => 
+      updateBudgetItem(item.id, { notes: value })
+    )
+
+    const variance = (parseFloat(item.budgeted || 0) - parseFloat(item.actual || 0))
+
+    return (
+      <MobileCard onDelete={() => deleteBudgetItem(item.id)}>
+        <MobileCardHeader
+          title={
+            <div className="space-y-1">
+              <Input
+                {...categoryField}
+                variant="minimal"
+                className="font-semibold text-gray-900 -mx-2 px-2"
+                placeholder="Category"
+              />
+              <Input
+                {...itemField}
+                variant="minimal"
+                className="text-sm text-gray-600 -mx-2 px-2"
+                placeholder="Item"
+              />
+            </div>
+          }
+        />
+        
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-600 block mb-1">Budgeted</label>
+              <Input
+                type="number"
+                {...budgetedField}
+                variant="filled"
+                className="text-sm font-medium"
+                placeholder="0.00"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-600 block mb-1">Actual</label>
+              <Input
+                type="number"
+                {...actualField}
+                variant="filled"
+                className="text-sm font-medium"
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+          
+          <MobileCardRow 
+            label="Variance" 
+            value={
+              <span className={`font-bold ${variance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                ${variance.toFixed(2)}
+              </span>
+            } 
+          />
+          
+          <MobileCardRow 
+            label="Date" 
+            value={
+              <input
+                type="date"
+                value={item.date || ''}
+                onChange={(e) => updateBudgetItem(item.id, { date: e.target.value })}
+                className="px-2 py-1 border border-gray-300 rounded-md text-sm"
+              />
+            } 
+          />
+          
+          <div>
+            <label className="text-sm text-gray-600 block mb-1">Notes</label>
+            <Input
+              {...notesField}
+              placeholder="Add notes..."
+              variant="filled"
+              className="text-sm w-full"
+            />
+          </div>
+        </div>
+      </MobileCard>
+    )
+  }
+
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-3xl font-bold text-gray-900">Budget Tracker</h2>
-        <div className="flex items-center gap-4">
-          <div className="text-sm font-medium flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Budget Tracker</h2>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+          <div className="text-xs sm:text-sm font-medium flex items-center gap-2">
             <span className={subscription ? 'text-green-600' : 'text-red-600'}>
               {subscription ? '🟢' : '🔴'}
             </span>
@@ -297,37 +403,37 @@ export default function BudgetTab() {
               {subscription ? 'Real-time sync active' : 'Connecting...'}
             </span>
           </div>
-          <Button onClick={addBudgetItem}>
-            + Add Budget Item
+          <Button onClick={addBudgetItem} size="sm" className="sm:size-base">
+            + Add Item
           </Button>
         </div>
       </div>
 
       {/* Budget Summary */}
-      <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-8 rounded-xl mb-6 border border-gray-200 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-white p-6 rounded-lg shadow-sm text-center">
-            <div className="text-gray-600 text-sm font-medium mb-2">Total Budget</div>
-            <div className="text-3xl font-bold text-gray-900">${totalBudget.toLocaleString()}</div>
+      <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 sm:p-6 lg:p-8 rounded-xl mb-4 sm:mb-6 border border-gray-200 shadow-sm">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
+          <div className="bg-white p-3 sm:p-4 lg:p-6 rounded-lg shadow-sm text-center">
+            <div className="text-gray-600 text-xs sm:text-sm font-medium mb-1 sm:mb-2">Total Budget</div>
+            <div className="text-lg sm:text-2xl lg:text-3xl font-bold text-gray-900">${totalBudget.toLocaleString()}</div>
           </div>
-          <div className="bg-white p-6 rounded-lg shadow-sm text-center">
-            <div className="text-gray-600 text-sm font-medium mb-2">Spent</div>
-            <div className="text-3xl font-bold text-red-600">
+          <div className="bg-white p-3 sm:p-4 lg:p-6 rounded-lg shadow-sm text-center">
+            <div className="text-gray-600 text-xs sm:text-sm font-medium mb-1 sm:mb-2">Spent</div>
+            <div className="text-lg sm:text-2xl lg:text-3xl font-bold text-red-600">
               ${totals.actual.toLocaleString()}
             </div>
           </div>
-          <div className="bg-white p-6 rounded-lg shadow-sm text-center">
-            <div className="text-gray-600 text-sm font-medium mb-2">Remaining</div>
-            <div className={`text-3xl font-bold ${remaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+          <div className="bg-white p-3 sm:p-4 lg:p-6 rounded-lg shadow-sm text-center">
+            <div className="text-gray-600 text-xs sm:text-sm font-medium mb-1 sm:mb-2">Remaining</div>
+            <div className={`text-lg sm:text-2xl lg:text-3xl font-bold ${remaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               ${remaining.toLocaleString()}
             </div>
           </div>
-          <div className="bg-white p-6 rounded-lg shadow-sm text-center">
-            <div className="text-gray-600 text-sm font-medium mb-2">% Used</div>
-            <div className="text-3xl font-bold text-gray-900">{percentUsed}%</div>
-            <div className="mt-3 bg-gray-200 rounded-full h-3 overflow-hidden">
+          <div className="bg-white p-3 sm:p-4 lg:p-6 rounded-lg shadow-sm text-center">
+            <div className="text-gray-600 text-xs sm:text-sm font-medium mb-1 sm:mb-2">% Used</div>
+            <div className="text-lg sm:text-2xl lg:text-3xl font-bold text-gray-900">{percentUsed}%</div>
+            <div className="mt-2 sm:mt-3 bg-gray-200 rounded-full h-2 sm:h-3 overflow-hidden">
               <div 
-                className={`h-3 rounded-full transition-all duration-500 ${percentUsed > 90 ? 'bg-red-600' : percentUsed > 70 ? 'bg-amber-500' : 'bg-green-600'}`}
+                className={`h-2 sm:h-3 rounded-full transition-all duration-500 ${percentUsed > 90 ? 'bg-red-600' : percentUsed > 70 ? 'bg-amber-500' : 'bg-green-600'}`}
                 style={{ width: `${Math.min(percentUsed, 100)}%` }}
               />
             </div>
@@ -335,40 +441,64 @@ export default function BudgetTab() {
         </div>
       </div>
 
-      {/* Budget Table */}
+      {/* Budget Table/Cards */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b-2 border-gray-200 bg-gray-50">
-                <th className="text-left p-3 text-gray-700 font-semibold">Category</th>
-                <th className="text-left p-3 text-gray-700 font-semibold">Item</th>
-                <th className="text-left p-3 w-32 text-gray-700 font-semibold">Budgeted</th>
-                <th className="text-left p-3 w-32 text-gray-700 font-semibold">Actual</th>
-                <th className="text-left p-3 w-32 text-gray-700 font-semibold">Variance</th>
-                <th className="text-left p-3 w-32 text-gray-700 font-semibold">Date</th>
-                <th className="text-left p-3 text-gray-700 font-semibold">Notes</th>
-                <th className="text-left p-3 w-20 text-gray-700 font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
+        <ResponsiveTable
+          mobileView={
+            <div className="p-4 space-y-3">
               {budgetItems.map((item) => (
-                <BudgetRow key={item.id} item={item} />
+                <BudgetCard key={item.id} item={item} />
               ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
-                <td className="p-3 text-gray-900" colSpan="2">Totals</td>
-                <td className="p-3 text-gray-900">${totals.budgeted.toFixed(2)}</td>
-                <td className="p-3 text-gray-900">${totals.actual.toFixed(2)}</td>
-                <td className={`p-3 text-lg ${(totals.budgeted - totals.actual) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ${(totals.budgeted - totals.actual).toFixed(2)}
-                </td>
-                <td colSpan="3"></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+              {/* Mobile totals summary */}
+              <div className="mt-4 pt-4 border-t-2 border-gray-300">
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="font-bold text-gray-900 mb-3">Totals Summary</h3>
+                  <div className="space-y-2">
+                    <MobileCardRow label="Budgeted" value={`$${totals.budgeted.toFixed(2)}`} />
+                    <MobileCardRow label="Actual" value={`$${totals.actual.toFixed(2)}`} />
+                    <MobileCardRow 
+                      label="Variance" 
+                      value={
+                        <span className={`font-bold ${(totals.budgeted - totals.actual) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          ${(totals.budgeted - totals.actual).toFixed(2)}
+                        </span>
+                      } 
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          }
+        >
+          <thead>
+            <tr className="border-b-2 border-gray-200 bg-gray-50">
+              <th className="text-left p-3 text-gray-700 font-semibold">Category</th>
+              <th className="text-left p-3 text-gray-700 font-semibold">Item</th>
+              <th className="text-left p-3 w-32 text-gray-700 font-semibold">Budgeted</th>
+              <th className="text-left p-3 w-32 text-gray-700 font-semibold">Actual</th>
+              <th className="text-left p-3 w-32 text-gray-700 font-semibold">Variance</th>
+              <th className="text-left p-3 w-32 text-gray-700 font-semibold">Date</th>
+              <th className="text-left p-3 text-gray-700 font-semibold">Notes</th>
+              <th className="text-left p-3 w-20 text-gray-700 font-semibold">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {budgetItems.map((item) => (
+              <BudgetRow key={item.id} item={item} />
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
+              <td className="p-3 text-gray-900" colSpan="2">Totals</td>
+              <td className="p-3 text-gray-900">${totals.budgeted.toFixed(2)}</td>
+              <td className="p-3 text-gray-900">${totals.actual.toFixed(2)}</td>
+              <td className={`p-3 text-lg ${(totals.budgeted - totals.actual) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                ${(totals.budgeted - totals.actual).toFixed(2)}
+              </td>
+              <td colSpan="3"></td>
+            </tr>
+          </tfoot>
+        </ResponsiveTable>
       </div>
     </div>
   )

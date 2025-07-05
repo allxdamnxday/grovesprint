@@ -11,6 +11,22 @@ import { TableSkeleton } from '@/components/ui/Skeleton'
 import CSVUploadModal from '@/components/ui/CSVUploadModal'
 import { useIsMobile } from '@/hooks/useMediaQuery'
 import { format } from 'date-fns'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragOverlay,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { DraggableTaskRow, DraggableTaskCard } from '../tasks/DraggableTask'
 
 // Custom hook for handling input with local state
 function useEditableField(initialValue, onSave) {
@@ -181,6 +197,91 @@ export default function TasksTab() {
       console.error('Error:', error)
     }
   }
+  
+  const handleDragStart = (event) => {
+    setActiveId(event.active.id)
+  }
+  
+  const handleDragEnd = async (event) => {
+    const { active, over } = event
+    
+    if (!over || active.id === over.id) {
+      setActiveId(null)
+      return
+    }
+    
+    // Find the tasks and their contexts
+    const activeTask = tasks.find(t => t.id === active.id)
+    const overTask = tasks.find(t => t.id === over.id)
+    
+    if (!activeTask || !overTask) {
+      setActiveId(null)
+      return
+    }
+    
+    // If moving within the same day
+    if (activeTask.week === overTask.week && activeTask.day === overTask.day) {
+      const dayTasks = tasks
+        .filter(t => t.week === activeTask.week && t.day === activeTask.day)
+        .sort((a, b) => (a.position || 0) - (b.position || 0))
+      
+      const oldIndex = dayTasks.findIndex(t => t.id === active.id)
+      const newIndex = dayTasks.findIndex(t => t.id === over.id)
+      
+      if (oldIndex !== newIndex) {
+        const newDayTasks = arrayMove(dayTasks, oldIndex, newIndex)
+        
+        // Update positions
+        const updates = newDayTasks.map((task, index) => ({
+          id: task.id,
+          position: index
+        }))
+        
+        // Optimistically update UI
+        setTasks(prevTasks => {
+          const otherTasks = prevTasks.filter(
+            t => !(t.week === activeTask.week && t.day === activeTask.day)
+          )
+          return [...otherTasks, ...newDayTasks.map((t, i) => ({ ...t, position: i }))]
+        })
+        
+        // Update in database
+        try {
+          for (const update of updates) {
+            await supabase
+              .from('tasks')
+              .update({ position: update.position })
+              .eq('id', update.id)
+          }
+        } catch (error) {
+          toast.error('Error updating task order')
+          console.error('Error:', error)
+          // Revert on error
+          fetchTasks()
+        }
+      }
+    } else {
+      // Moving to a different day - update week/day and reset position
+      try {
+        await supabase
+          .from('tasks')
+          .update({ 
+            week: overTask.week, 
+            day: overTask.day,
+            position: overTask.position + 1 
+          })
+          .eq('id', activeTask.id)
+        
+        toast.success('Task moved to ' + overTask.day)
+        fetchTasks() // Refresh to get updated positions
+      } catch (error) {
+        toast.error('Error moving task')
+        console.error('Error:', error)
+      }
+    }
+    
+    setActiveId(null)
+  }
 
   // Filter tasks based on search query
   const filteredTasks = searchQuery.trim() === '' 
@@ -254,8 +355,8 @@ export default function TasksTab() {
       updateTask(task.id, { notes: value })
     )
 
-    return (
-      <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors duration-150">
+    const rowContent = (
+      <>
         <td className="p-3">
           <input
             type="checkbox"
@@ -312,7 +413,13 @@ export default function TasksTab() {
             Delete
           </button>
         </td>
-      </tr>
+      </>
+    )
+    
+    return (
+      <DraggableTaskRow task={task} id={task.id}>
+        {rowContent}
+      </DraggableTaskRow>
     )
   }
 
@@ -345,17 +452,15 @@ export default function TasksTab() {
       setIsModalOpen(true)
     }
     
-    return (
-      <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
-        {/* Header with checkbox and status */}
-        <div className="flex items-start gap-3 mb-3">
-          <input
-            type="checkbox"
-            checked={task.completed}
-            onChange={(e) => updateTask(task.id, { completed: e.target.checked })}
-            className="w-5 h-5 mt-0.5 text-green-600 rounded focus:ring-2 focus:ring-green-500 focus:ring-offset-1 cursor-pointer"
-          />
-          <div className="flex-1">
+    const cardContent = (
+      <>
+        <input
+          type="checkbox"
+          checked={task.completed}
+          onChange={(e) => updateTask(task.id, { completed: e.target.checked })}
+          className="w-5 h-5 mt-0.5 text-green-600 rounded focus:ring-2 focus:ring-green-500 focus:ring-offset-1 cursor-pointer"
+        />
+        <div className="flex-1">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <PriorityDot priority={task.priority} />
@@ -379,7 +484,6 @@ export default function TasksTab() {
                 {task.notes}
               </div>
             )}
-          </div>
         </div>
         
         {/* Action button */}
@@ -389,7 +493,13 @@ export default function TasksTab() {
         >
           View Details
         </button>
-      </div>
+      </>
+    )
+    
+    return (
+      <DraggableTaskCard task={task} id={task.id}>
+        {cardContent}
+      </DraggableTaskCard>
     )
   }
 
@@ -475,7 +585,13 @@ export default function TasksTab() {
   }
 
   return (
-    <div>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div>
       <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-6 gap-4">
         <h2 className="text-2xl md:text-3xl font-bold text-gray-900">Launch Tasks & Timeline</h2>
         <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-4">
@@ -529,7 +645,7 @@ export default function TasksTab() {
       {searchQuery && (
         <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
           <p className="text-sm text-green-800">
-            Found <span className="font-semibold">{filteredTasks.length}</span> task{filteredTasks.length !== 1 ? 's' : ''} matching "{searchQuery}"
+            Found <span className="font-semibold">{filteredTasks.length}</span> task{filteredTasks.length !== 1 ? 's' : ''} matching &ldquo;{searchQuery}&rdquo;
           </p>
         </div>
       )}
@@ -579,10 +695,14 @@ export default function TasksTab() {
 
               {/* Mobile View - Cards */}
               {isMobile ? (
-                <div className="space-y-3">
-                  {dayTasks.map((task) => (
-                    <TaskCard key={task.id} task={task} />
-                  ))}
+                <SortableContext
+                  items={dayTasks.map(t => t.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-3">
+                    {dayTasks.map((task) => (
+                      <TaskCard key={task.id} task={task} />
+                    ))}
                   <button
                     onClick={() => {
                       setCurrentWeek(week.number)
@@ -593,13 +713,15 @@ export default function TasksTab() {
                   >
                     + Add Task to {day}
                   </button>
-                </div>
+                  </div>
+                </SortableContext>
               ) : (
                 /* Desktop View - Table */
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b-2 border-gray-200">
+                        <th className="text-left p-3 w-10 text-gray-700 font-semibold"></th>
                         <th className="text-left p-3 w-10 text-gray-700 font-semibold">✓</th>
                         <th className="text-left p-3 text-gray-700 font-semibold">Task</th>
                         <th className="text-left p-3 w-32 text-gray-700 font-semibold">Due Date</th>
@@ -610,9 +732,14 @@ export default function TasksTab() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {dayTasks.map((task) => (
-                        <TaskRow key={task.id} task={task} />
-                      ))}
+                      <SortableContext
+                        items={dayTasks.map(t => t.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {dayTasks.map((task) => (
+                          <TaskRow key={task.id} task={task} />
+                        ))}
+                      </SortableContext>
                     </tbody>
                   </table>
                 </div>
@@ -657,6 +784,20 @@ export default function TasksTab() {
       >
         {editingTask && <TaskEditForm task={editingTask} />}
       </Modal>
+      
+      {/* Drag Overlay */}
+      <DragOverlay>
+        {activeId && (
+          <div className="opacity-80">
+            {tasks.find(t => t.id === activeId) && (
+              <div className="bg-white p-3 rounded-lg shadow-lg border-2 border-green-500">
+                {tasks.find(t => t.id === activeId).task}
+              </div>
+            )}
+          </div>
+        )}
+      </DragOverlay>
     </div>
+    </DndContext>
   )
 }

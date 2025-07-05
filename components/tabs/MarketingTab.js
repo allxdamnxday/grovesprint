@@ -426,7 +426,7 @@ export default function MarketingTab() {
         {/* Caption Preview - 2 lines max */}
         {campaign.caption && (
           <div className="text-sm text-gray-700 mb-4 line-clamp-2">
-            "{campaign.caption}"
+            &ldquo;{campaign.caption}&rdquo;
           </div>
         )}
         

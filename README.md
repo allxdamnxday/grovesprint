@@ -95,6 +95,22 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) to view the application.
 
+## Getting Started
+
+First, install dependencies:
+
+```bash
+npm install
+```
+
+Then, run the development server:
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
 ## Project Structure
 
 ```
@@ -125,14 +141,35 @@ The app uses 7 main tables:
 
 ## Deployment
 
-### Deploy to Vercel
+### Deploy on Vercel
 
-1. Push your code to GitHub
-2. Import the repository on [Vercel](https://vercel.com)
-3. Add environment variables:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-4. Deploy!
+The easiest way to deploy Memory Grove Tracker is using [Vercel](https://vercel.com):
+
+1. **Import your GitHub repository** at [vercel.com/new](https://vercel.com/new)
+2. **Configure Environment Variables** in the Vercel dashboard:
+   - `NEXT_PUBLIC_SUPABASE_URL` - Your Supabase project URL
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anonymous key
+3. **Deploy** - Vercel will automatically build and deploy your application
+
+### Environment Variables
+
+Create a `.env.local` file in the root directory with:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+**Important**: Never commit `.env.local` to version control. The `.gitignore` file already excludes it.
+
+### Production Build
+
+To create a production build locally:
+
+```bash
+npm run build
+npm run start
+```
 
 ### Other Platforms
 

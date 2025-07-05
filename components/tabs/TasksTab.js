@@ -6,8 +6,11 @@ import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
 import Badge from '@/components/ui/Badge'
 import PriorityDot from '@/components/ui/PriorityDot'
+import Modal from '@/components/ui/Modal'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import CSVUploadModal from '@/components/ui/CSVUploadModal'
+import { useIsMobile } from '@/hooks/useMediaQuery'
+import { format } from 'date-fns'
 
 // Custom hook for handling input with local state
 function useEditableField(initialValue, onSave) {
@@ -39,6 +42,11 @@ export default function TasksTab() {
   const [loading, setLoading] = useState(true)
   const [subscription, setSubscription] = useState(null)
   const [showCSVModal, setShowCSVModal] = useState(false)
+  const [editingTask, setEditingTask] = useState(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [currentWeek, setCurrentWeek] = useState(null)
+  const [currentDay, setCurrentDay] = useState(null)
+  const isMobile = useIsMobile()
 
   const fetchTasks = useCallback(async () => {
     try {
@@ -316,22 +324,160 @@ export default function TasksTab() {
     }
   }
 
+  // Mobile Task Card Component
+  const TaskCard = ({ task }) => {
+    const handleEdit = () => {
+      setEditingTask(task)
+      setIsModalOpen(true)
+    }
+    
+    return (
+      <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+        {/* Header with checkbox and status */}
+        <div className="flex items-start gap-3 mb-3">
+          <input
+            type="checkbox"
+            checked={task.completed}
+            onChange={(e) => updateTask(task.id, { completed: e.target.checked })}
+            className="w-5 h-5 mt-0.5 text-green-600 rounded focus:ring-2 focus:ring-green-500 focus:ring-offset-1 cursor-pointer"
+          />
+          <div className="flex-1">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <PriorityDot priority={task.priority} />
+                <span className="font-medium text-gray-900">{task.task}</span>
+              </div>
+              <Badge variant={task.status === 'completed' ? 'success' : 'warning'} size="sm">
+                {task.status}
+              </Badge>
+            </div>
+            
+            {/* Due date if set */}
+            {task.due_date && (
+              <div className="text-sm text-gray-500 mb-2">
+                Due: {format(new Date(task.due_date), 'MMM d, yyyy')}
+              </div>
+            )}
+            
+            {/* Notes preview if exists */}
+            {task.notes && (
+              <div className="text-sm text-gray-600 line-clamp-2 mb-3">
+                {task.notes}
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {/* Action button */}
+        <button
+          onClick={handleEdit}
+          className="w-full py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-md text-sm font-medium transition-colors"
+        >
+          View Details
+        </button>
+      </div>
+    )
+  }
+
+  // Task Edit Form for Modal
+  const TaskEditForm = ({ task }) => {
+    return (
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Task Name</label>
+          <input
+            type="text"
+            value={task.task}
+            onChange={(e) => updateTask(task.id, { task: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+          <input
+            type="date"
+            value={task.due_date || ''}
+            onChange={(e) => updateTask(task.id, { due_date: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+          <Select
+            value={task.priority}
+            onChange={(e) => updateTask(task.id, { priority: e.target.value })}
+            options={priorityOptions}
+            className="w-full"
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={task.completed}
+                onChange={(e) => updateTask(task.id, { completed: e.target.checked })}
+                className="w-5 h-5 text-green-600 rounded focus:ring-2 focus:ring-green-500"
+              />
+              <span className="text-sm text-gray-700">Mark as completed</span>
+            </label>
+          </div>
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+          <textarea
+            value={task.notes || ''}
+            onChange={(e) => updateTask(task.id, { notes: e.target.value })}
+            placeholder="Add notes..."
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+            rows="3"
+          />
+        </div>
+        
+        <div className="flex gap-3 pt-4">
+          <button
+            onClick={() => {
+              deleteTask(task.id)
+              setIsModalOpen(false)
+            }}
+            className="px-4 py-2 bg-red-50 text-red-600 rounded-lg font-medium hover:bg-red-100 transition-colors"
+          >
+            Delete Task
+          </button>
+          <button
+            onClick={() => setIsModalOpen(false)}
+            className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-3xl font-bold text-gray-900">Launch Tasks & Timeline</h2>
-        <div className="flex items-center gap-4">
-          <Button
-            variant="secondary"
-            onClick={() => setShowCSVModal(true)}
-          >
-            📤 Import CSV
-          </Button>
-          <div className="text-sm font-medium flex items-center gap-2">
+        <h2 className="text-2xl md:text-3xl font-bold text-gray-900">Launch Tasks & Timeline</h2>
+        <div className="flex items-center gap-2 md:gap-4">
+          {!isMobile && (
+            <Button
+              variant="secondary"
+              onClick={() => setShowCSVModal(true)}
+            >
+              📤 Import CSV
+            </Button>
+          )}
+          <div className="text-xs md:text-sm font-medium flex items-center gap-2">
             <span className={subscription ? 'text-green-600' : 'text-red-600'}>
               {subscription ? '🟢' : '🔴'}
             </span>
-            <span className="text-gray-600">
+            <span className="text-gray-600 hidden md:inline">
               {subscription ? 'Real-time sync active' : 'Connecting...'}
             </span>
           </div>
@@ -345,37 +491,59 @@ export default function TasksTab() {
           </div>
 
           {Object.entries(groupedTasks[week.number] || {}).map(([day, dayTasks]) => (
-            <div key={day} className="bg-white p-6 mb-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+            <div key={day} className="bg-white p-4 md:p-6 mb-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
               <div className="flex justify-between items-center mb-4">
                 <h4 className="font-bold text-lg text-gray-900">{day}</h4>
-                <Button
-                  size="sm"
-                  onClick={() => addTask(week.number, day)}
-                >
-                  + Add Task
-                </Button>
+                {!isMobile && (
+                  <Button
+                    size="sm"
+                    onClick={() => addTask(week.number, day)}
+                  >
+                    + Add Task
+                  </Button>
+                )}
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b-2 border-gray-200">
-                      <th className="text-left p-3 w-10 text-gray-700 font-semibold">✓</th>
-                      <th className="text-left p-3 text-gray-700 font-semibold">Task</th>
-                      <th className="text-left p-3 w-32 text-gray-700 font-semibold">Due Date</th>
-                      <th className="text-left p-3 w-28 text-gray-700 font-semibold">Priority</th>
-                      <th className="text-left p-3 w-32 text-gray-700 font-semibold">Status</th>
-                      <th className="text-left p-3 text-gray-700 font-semibold">Notes</th>
-                      <th className="text-left p-3 w-20 text-gray-700 font-semibold">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {dayTasks.map((task) => (
-                      <TaskRow key={task.id} task={task} />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              {/* Mobile View - Cards */}
+              {isMobile ? (
+                <div className="space-y-3">
+                  {dayTasks.map((task) => (
+                    <TaskCard key={task.id} task={task} />
+                  ))}
+                  <button
+                    onClick={() => {
+                      setCurrentWeek(week.number)
+                      setCurrentDay(day)
+                      addTask(week.number, day)
+                    }}
+                    className="w-full py-3 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg text-sm font-medium transition-colors border-2 border-dashed border-gray-300"
+                  >
+                    + Add Task to {day}
+                  </button>
+                </div>
+              ) : (
+                /* Desktop View - Table */
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b-2 border-gray-200">
+                        <th className="text-left p-3 w-10 text-gray-700 font-semibold">✓</th>
+                        <th className="text-left p-3 text-gray-700 font-semibold">Task</th>
+                        <th className="text-left p-3 w-32 text-gray-700 font-semibold">Due Date</th>
+                        <th className="text-left p-3 w-28 text-gray-700 font-semibold">Priority</th>
+                        <th className="text-left p-3 w-32 text-gray-700 font-semibold">Status</th>
+                        <th className="text-left p-3 text-gray-700 font-semibold">Notes</th>
+                        <th className="text-left p-3 w-20 text-gray-700 font-semibold">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {dayTasks.map((task) => (
+                        <TaskRow key={task.id} task={task} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           ))}
 
@@ -403,6 +571,18 @@ export default function TasksTab() {
         onImport={handleCSVImport}
         existingTasks={tasks}
       />
+      
+      {/* Edit Modal */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false)
+          setEditingTask(null)
+        }}
+        title="Edit Task"
+      >
+        {editingTask && <TaskEditForm task={editingTask} />}
+      </Modal>
     </div>
   )
 }

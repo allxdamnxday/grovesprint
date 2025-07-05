@@ -154,3 +154,67 @@ input, select, textarea, button {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--gray-500);
 }
+
+/* Mobile-specific utilities */
+@media (max-width: 767px) {
+  /* Compact spacing for mobile */
+  .mobile-compact {
+    padding: 0.5rem;
+  }
+  
+  /* Stack elements vertically on mobile */
+  .mobile-stack {
+    flex-direction: column;
+  }
+  
+  /* Visibility utilities */
+  .hide-mobile {
+    display: none !important;
+  }
+  
+  .show-mobile {
+    display: block;
+  }
+  
+  /* Touch-friendly tap targets */
+  .mobile-touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Mobile card styling */
+  .mobile-card {
+    background: white;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+    border: 1px solid var(--gray-200);
+  }
+  
+  /* Smaller text on mobile */
+  .mobile-text-sm {
+    font-size: 0.875rem;
+  }
+  
+  /* Better spacing for stacked elements */
+  .mobile-space-y-2 > * + * {
+    margin-top: 0.5rem;
+  }
+  
+  .mobile-space-y-3 > * + * {
+    margin-top: 0.75rem;
+  }
+  
+  /* Responsive table wrapper */
+  .mobile-table-scroll {
+    -webkit-overflow-scrolling: touch;
+    overflow-x: auto;
+  }
+}
+
+/* Desktop-only utilities */
+@media (min-width: 768px) {
+  .desktop-only {
+    display: block;
+  }
+}

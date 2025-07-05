@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useSupabaseClient } from '@supabase/auth-helpers-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useSupabaseClient, useUser } from '@supabase/auth-helpers-react'
 import toast from 'react-hot-toast'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
@@ -27,33 +27,63 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { DraggableTaskRow, DraggableTaskCard } from '../tasks/DraggableTask'
+import { createDebouncedFunction } from '@/utils/debounce'
 
-// Custom hook for handling input with local state
-function useEditableField(initialValue, onSave) {
+// Custom hook for handling input with local state and debounced saving
+function useEditableField(initialValue, onSave, delay = 800) {
   const [value, setValue] = useState(initialValue)
   const [isEditing, setIsEditing] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const debouncedSaveRef = useRef(null)
 
   useEffect(() => {
     setValue(initialValue)
   }, [initialValue])
 
-  const handleChange = (e) => {
-    setValue(e.target.value)
-    setIsEditing(true)
-  }
+  useEffect(() => {
+    // Create debounced save function
+    debouncedSaveRef.current = createDebouncedFunction(async (newValue) => {
+      if (newValue !== initialValue) {
+        setIsSaving(true)
+        try {
+          await onSave(newValue)
+        } finally {
+          setIsSaving(false)
+        }
+      }
+    }, delay)
 
-  const handleBlur = () => {
-    if (isEditing && value !== initialValue) {
-      onSave(value)
-      setIsEditing(false)
+    return () => {
+      if (debouncedSaveRef.current) {
+        debouncedSaveRef.current.cancel()
+      }
+    }
+  }, [onSave, initialValue, delay])
+
+  const handleChange = (e) => {
+    const newValue = e.target.value
+    setValue(newValue)
+    setIsEditing(true)
+    
+    // Trigger debounced save
+    if (debouncedSaveRef.current) {
+      debouncedSaveRef.current(newValue)
     }
   }
 
-  return { value, onChange: handleChange, onBlur: handleBlur }
+  const handleBlur = () => {
+    if (debouncedSaveRef.current) {
+      debouncedSaveRef.current.flush(value)
+    }
+    setIsEditing(false)
+  }
+
+  return { value, onChange: handleChange, onBlur: handleBlur, isSaving }
 }
 
 export default function TasksTab() {
   const supabase = useSupabaseClient()
+  const user = useUser()
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
   const [subscription, setSubscription] = useState(null)
@@ -64,6 +94,8 @@ export default function TasksTab() {
   const [currentDay, setCurrentDay] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeId, setActiveId] = useState(null)
+  const [connectionStatus, setConnectionStatus] = useState('connecting')
+  const [pendingUpdates, setPendingUpdates] = useState(new Set())
   const isMobile = useIsMobile()
   
   // Setup drag and drop sensors
@@ -101,7 +133,7 @@ export default function TasksTab() {
   useEffect(() => {
     fetchTasks()
     
-    // Set up realtime subscription
+    // Set up realtime subscription with enhanced error handling
     const channel = supabase
       .channel('tasks-channel')
       .on('postgres_changes', 
@@ -112,9 +144,27 @@ export default function TasksTab() {
         }, 
         (payload) => {
           console.log('Task change received!', payload)
+          
+          // Skip updates that we initiated (pending updates)
+          if (payload.eventType === 'UPDATE' && pendingUpdates.has(payload.new.id)) {
+            // Remove from pending once we receive confirmation
+            setPendingUpdates(prev => {
+              const newSet = new Set(prev)
+              newSet.delete(payload.new.id)
+              return newSet
+            })
+            return
+          }
+          
           // Handle different events
           if (payload.eventType === 'INSERT') {
-            setTasks(prev => [...prev, payload.new])
+            setTasks(prev => {
+              // Check if task already exists (from optimistic update)
+              if (prev.some(t => t.id === payload.new.id)) {
+                return prev
+              }
+              return [...prev, payload.new]
+            })
           } else if (payload.eventType === 'UPDATE') {
             setTasks(prev => prev.map(task => 
               task.id === payload.new.id ? payload.new : task
@@ -127,7 +177,13 @@ export default function TasksTab() {
       .subscribe((status) => {
         console.log('Subscription status:', status)
         if (status === 'SUBSCRIBED') {
+          setConnectionStatus('connected')
           console.log('Successfully subscribed to tasks channel')
+        } else if (status === 'CHANNEL_ERROR') {
+          setConnectionStatus('error')
+          toast.error('Real-time connection lost. Please refresh the page.')
+        } else if (status === 'TIMED_OUT') {
+          setConnectionStatus('timeout')
         }
       })
 
@@ -139,7 +195,7 @@ export default function TasksTab() {
         channel.unsubscribe()
       }
     }
-  }, [supabase, fetchTasks])
+  }, [supabase, fetchTasks, pendingUpdates])
 
   const addTask = async (week, day) => {
     try {
@@ -172,23 +228,56 @@ export default function TasksTab() {
     }
   }
 
-  const updateTask = async (id, updates) => {
+  const updateTask = async (id, updates, skipOptimistic = false) => {
     try {
+      // Add to pending updates to prevent echo from real-time
+      setPendingUpdates(prev => new Set(prev).add(id))
+      
+      // Optimistic update - update local state immediately
+      if (!skipOptimistic) {
+        setTasks(prev => prev.map(task => 
+          task.id === id 
+            ? { 
+                ...task, 
+                ...updates,
+                // If updating completed status, also update status field
+                ...(updates.completed !== undefined ? {
+                  status: updates.completed ? 'completed' : 'pending'
+                } : {})
+              } 
+            : task
+        ))
+      }
+      
+      // Prepare final updates object
+      const finalUpdates = {
+        ...updates,
+        // Include status update if completed is being changed
+        ...(updates.completed !== undefined ? {
+          status: updates.completed ? 'completed' : 'pending'
+        } : {})
+      }
+      
       const { error } = await supabase
         .from('tasks')
-        .update(updates)
+        .update(finalUpdates)
         .eq('id', id)
 
       if (error) throw error
       
-      // Update status when task is completed
-      if (updates.completed !== undefined) {
-        await supabase
-          .from('tasks')
-          .update({ status: updates.completed ? 'completed' : 'pending' })
-          .eq('id', id)
-      }
     } catch (error) {
+      // Rollback optimistic update on error
+      if (!skipOptimistic) {
+        fetchTasks()
+      }
+      
+      // Remove from pending updates
+      setPendingUpdates(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(id)
+        return newSet
+      })
+      
       toast.error('Error updating task')
       console.error('Error:', error)
     }
@@ -362,12 +451,12 @@ export default function TasksTab() {
 
   // Task row component with local state for editable fields
   const TaskRow = ({ task }) => {
-    const taskNameField = useEditableField(task.task, (value) => 
-      updateTask(task.id, { task: value })
+    const taskNameField = useEditableField(task.task, async (value) => 
+      await updateTask(task.id, { task: value })
     )
     
-    const notesField = useEditableField(task.notes || '', (value) => 
-      updateTask(task.id, { notes: value })
+    const notesField = useEditableField(task.notes || '', async (value) => 
+      await updateTask(task.id, { notes: value })
     )
 
     const rowContent = (
@@ -381,11 +470,16 @@ export default function TasksTab() {
           />
         </td>
         <td className="p-3">
-          <Input
-            {...taskNameField}
-            variant="filled"
-            className="text-sm font-medium"
-          />
+          <div className="relative">
+            <Input
+              {...taskNameField}
+              variant="filled"
+              className="text-sm font-medium"
+            />
+            {taskNameField.isSaving && (
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">Saving...</span>
+            )}
+          </div>
         </td>
         <td className="p-3">
           <input
@@ -413,12 +507,17 @@ export default function TasksTab() {
           </Badge>
         </td>
         <td className="p-3">
-          <Input
-            {...notesField}
-            placeholder="Add notes..."
-            variant="filled"
-            className="text-sm"
-          />
+          <div className="relative">
+            <Input
+              {...notesField}
+              placeholder="Add notes..."
+              variant="filled"
+              className="text-sm"
+            />
+            {notesField.isSaving && (
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">Saving...</span>
+            )}
+          </div>
         </td>
         <td className="p-3">
           <button
@@ -646,11 +745,11 @@ export default function TasksTab() {
             </Button>
           )}
           <div className="text-xs md:text-sm font-medium flex items-center gap-2">
-            <span className={subscription ? 'text-green-600' : 'text-red-600'}>
-              {subscription ? '🟢' : '🔴'}
+            <span className={connectionStatus === 'connected' ? 'text-green-600' : connectionStatus === 'error' ? 'text-red-600' : 'text-yellow-600'}>
+              {connectionStatus === 'connected' ? '🟢' : connectionStatus === 'error' ? '🔴' : '🟡'}
             </span>
             <span className="text-gray-600 hidden md:inline">
-              {subscription ? 'Real-time sync active' : 'Connecting...'}
+              {connectionStatus === 'connected' ? 'Real-time sync active' : connectionStatus === 'error' ? 'Connection error' : 'Connecting...'}
             </span>
           </div>
         </div>

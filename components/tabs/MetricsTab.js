@@ -3,8 +3,14 @@ import { useSupabaseClient } from '@supabase/auth-helpers-react'
 import toast from 'react-hot-toast'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { format } from 'date-fns'
+import { 
+  EnhancedRevenueChart, 
+  EnhancedUnitsChart, 
+  EnhancedMetricCard,
+  ConversionFunnelChart 
+} from '@/components/charts/EnhancedCharts'
+import { MetricsPageSkeleton } from '@/components/ui/EnhancedSkeleton'
 
 // Custom hook for handling input with local state
 function useEditableField(initialValue, onSave, type = 'text') {
@@ -31,29 +37,10 @@ function useEditableField(initialValue, onSave, type = 'text') {
   return { value, onChange: handleChange, onBlur: handleBlur }
 }
 
-// Metric card component
-const MetricCard = ({ label, value, target, icon, prefix = '', suffix = '' }) => {
-  const percentage = target > 0 ? (value / target * 100).toFixed(1) : 0
-  const isExceeded = value > target
-  
-  return (
-    <div className="bg-gray-50 p-6 rounded-lg text-center">
-      <div className="text-gray-600 mb-2">{label}</div>
-      <div className="text-3xl font-bold mb-2">
-        {prefix}{typeof value === 'number' ? value.toLocaleString() : value}{suffix}
-      </div>
-      <div className="text-sm text-gray-500">Target: {prefix}{target.toLocaleString()}{suffix}</div>
-      <div className="mt-3 bg-gray-200 rounded-full h-2">
-        <div 
-          className={`h-2 rounded-full ${isExceeded ? 'bg-green-600' : percentage > 80 ? 'bg-yellow-500' : 'bg-blue-600'}`}
-          style={{ width: `${Math.min(percentage, 100)}%` }}
-        />
-      </div>
-      <div className="text-sm mt-1 font-semibold">
-        {percentage}% of target
-      </div>
-    </div>
-  )
+// Calculate trends (compare to previous period)
+const calculateTrend = (current, previous) => {
+  if (!previous || previous === 0) return null
+  return ((current - previous) / previous * 100).toFixed(1)
 }
 
 export default function MetricsTab() {
@@ -283,7 +270,7 @@ export default function MetricsTab() {
     }
   }
 
-  if (loading) return <div className="text-center py-8">Loading metrics...</div>
+  if (loading) return <MetricsPageSkeleton />
 
   // Daily metric row component
   const MetricRow = ({ metric }) => {
@@ -371,95 +358,90 @@ export default function MetricsTab() {
         </div>
       </div>
 
-      {/* Metric Cards */}
+      {/* Metric Cards with enhanced styling */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-        <MetricCard 
+        <EnhancedMetricCard 
           label="Memory Seed Kits Sold"
           value={aggregatedMetrics.totalUnits}
           target={100}
+          trend={calculateTrend(aggregatedMetrics.totalUnits, 50)}
         />
-        <MetricCard 
+        <EnhancedMetricCard 
           label="Total Revenue"
           value={aggregatedMetrics.totalRevenue}
           target={5000}
           prefix="$"
+          trend={calculateTrend(aggregatedMetrics.totalRevenue, 2000)}
         />
-        <MetricCard 
+        <EnhancedMetricCard 
           label="Email Subscribers"
           value={aggregatedMetrics.totalEmailSignups}
           target={500}
+          trend={calculateTrend(aggregatedMetrics.totalEmailSignups, 200)}
         />
-        <MetricCard 
+        <EnhancedMetricCard 
           label="Partnerships Signed"
           value={signedPartnerships}
           target={5}
+          trend={null}
         />
-        <MetricCard 
+        <EnhancedMetricCard 
           label="Task Completion"
           value={parseFloat(taskCompletionRate)}
           target={80}
           suffix="%"
+          trend={null}
         />
-        <MetricCard 
+        <EnhancedMetricCard 
           label="Total Contacts"
           value={totalContacts}
           target={50}
+          trend={calculateTrend(totalContacts, 30)}
         />
       </div>
       
-      {/* Additional KPI Row */}
+      {/* Additional KPI Row with enhanced cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <MetricCard 
+        <EnhancedMetricCard 
           label="Conversion Rate"
           value={parseFloat(conversionRate)}
           target={2}
           suffix="%"
+          trend={calculateTrend(parseFloat(conversionRate), 1.5)}
         />
-        <MetricCard 
+        <EnhancedMetricCard 
           label="Avg Order Value"
           value={parseFloat(avgOrderValue)}
           target={50}
           prefix="$"
+          trend={calculateTrend(parseFloat(avgOrderValue), 45)}
         />
-        <MetricCard 
+        <EnhancedMetricCard 
           label="Tasks Completed"
           value={completedTasks}
           target={totalTasks}
+          trend={null}
         />
-        <MetricCard 
+        <EnhancedMetricCard 
           label="Active Partnerships"
           value={partnerships.filter(p => p.status === 'active' || p.status === 'signed').length}
           target={10}
+          trend={null}
         />
       </div>
 
-      {/* Charts */}
+      {/* Enhanced Charts with animations */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-lg border">
-          <h3 className="text-lg font-semibold mb-4">Revenue Trend</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={2} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-        
-        <div className="bg-white p-6 rounded-lg border">
-          <h3 className="text-lg font-semibold mb-4">Units Sold</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="units" fill="#3b82f6" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <EnhancedRevenueChart data={chartData} />
+        <EnhancedUnitsChart data={chartData} />
+      </div>
+      
+      {/* Conversion Funnel */}
+      <div className="mb-8">
+        <ConversionFunnelChart 
+          visitors={aggregatedMetrics.totalVisitors} 
+          conversions={aggregatedMetrics.totalConversions}
+        />
       </div>
 
       {/* Daily Metrics Table */}

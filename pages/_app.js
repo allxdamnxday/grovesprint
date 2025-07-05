@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs'
 import { SessionContextProvider } from '@supabase/auth-helpers-react'
 import { Toaster } from 'react-hot-toast'
+import RealtimeStatusBar from '@/components/ui/RealtimeStatusBar'
 import "@/styles/globals.css";
 
 export default function App({ Component, pageProps }) {
@@ -13,6 +14,7 @@ export default function App({ Component, pageProps }) {
       initialSession={pageProps.initialSession}
     >
       <Component {...pageProps} />
+      <RealtimeStatusBar />
       <Toaster 
         position="top-right"
         toastOptions={{

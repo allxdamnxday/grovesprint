@@ -62,6 +62,9 @@ export default function MetricsTab() {
   const [loading, setLoading] = useState(true)
   const [subscription, setSubscription] = useState(null)
   const [chartData, setChartData] = useState([])
+  const [partnerships, setPartnerships] = useState([])
+  const [tasks, setTasks] = useState([])
+  const [contacts, setContacts] = useState([])
   
   // Calculate aggregated metrics
   const aggregatedMetrics = dailyMetrics.reduce((acc, metric) => {
@@ -87,19 +90,54 @@ export default function MetricsTab() {
   const avgOrderValue = aggregatedMetrics.totalUnits > 0
     ? (aggregatedMetrics.totalRevenue / aggregatedMetrics.totalUnits).toFixed(2)
     : 0
+    
+  // Calculate real metrics from other tabs
+  const signedPartnerships = partnerships.filter(p => p.status === 'signed').length
+  const completedTasks = tasks.filter(t => t.completed).length
+  const totalTasks = tasks.length
+  const taskCompletionRate = totalTasks > 0 ? ((completedTasks / totalTasks) * 100).toFixed(1) : 0
+  const totalContacts = contacts.length
 
   const fetchDailyMetrics = useCallback(async () => {
     try {
-      const { data, error } = await supabase
+      // Fetch daily metrics
+      const { data: metricsData, error: metricsError } = await supabase
         .from('daily_metrics')
         .select('*')
         .order('date', { ascending: true })
 
-      if (error) throw error
-      setDailyMetrics(data || [])
+      if (metricsError) throw metricsError
+      setDailyMetrics(metricsData || [])
+      
+      // Fetch partnerships data
+      const { data: partnershipsData, error: partnershipsError } = await supabase
+        .from('partnerships')
+        .select('*')
+      
+      if (!partnershipsError) {
+        setPartnerships(partnershipsData || [])
+      }
+      
+      // Fetch tasks data
+      const { data: tasksData, error: tasksError } = await supabase
+        .from('tasks')
+        .select('*')
+      
+      if (!tasksError) {
+        setTasks(tasksData || [])
+      }
+      
+      // Fetch contacts data
+      const { data: contactsData, error: contactsError } = await supabase
+        .from('contacts')
+        .select('*')
+      
+      if (!contactsError) {
+        setContacts(contactsData || [])
+      }
       
       // Prepare chart data
-      const chartData = (data || []).map(metric => ({
+      const chartData = (metricsData || []).map(metric => ({
         date: format(new Date(metric.date), 'MMM dd'),
         revenue: parseFloat(metric.revenue || 0),
         units: parseInt(metric.units_sold || 0),
@@ -117,15 +155,11 @@ export default function MetricsTab() {
   useEffect(() => {
     fetchDailyMetrics()
     
-    // Set up realtime subscription
-    const channel = supabase
-      .channel('metrics-channel')
+    // Set up realtime subscriptions for all relevant tables
+    const metricsChannel = supabase
+      .channel('metrics-all-data')
       .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'daily_metrics' 
-        }, 
+        { event: '*', schema: 'public', table: 'daily_metrics' }, 
         (payload) => {
           console.log('Metrics change received!', payload)
           if (payload.eventType === 'INSERT') {
@@ -139,15 +173,43 @@ export default function MetricsTab() {
           }
         }
       )
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'partnerships' },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setPartnerships(prev => [...prev, payload.new])
+          } else if (payload.eventType === 'UPDATE') {
+            setPartnerships(prev => prev.map(item => 
+              item.id === payload.new.id ? payload.new : item
+            ))
+          } else if (payload.eventType === 'DELETE') {
+            setPartnerships(prev => prev.filter(item => item.id !== payload.old.id))
+          }
+        }
+      )
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'tasks' },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setTasks(prev => [...prev, payload.new])
+          } else if (payload.eventType === 'UPDATE') {
+            setTasks(prev => prev.map(item => 
+              item.id === payload.new.id ? payload.new : item
+            ))
+          } else if (payload.eventType === 'DELETE') {
+            setTasks(prev => prev.filter(item => item.id !== payload.old.id))
+          }
+        }
+      )
       .subscribe((status) => {
         console.log('Metrics subscription status:', status)
       })
 
-    setSubscription(channel)
+    setSubscription(metricsChannel)
 
     return () => {
-      if (channel) {
-        channel.unsubscribe()
+      if (metricsChannel) {
+        metricsChannel.unsubscribe()
       }
     }
   }, [supabase, fetchDailyMetrics])
@@ -329,9 +391,24 @@ export default function MetricsTab() {
         />
         <MetricCard 
           label="Partnerships Signed"
-          value={1} // TODO: Pull from partnerships table
-          target={1}
+          value={signedPartnerships}
+          target={5}
         />
+        <MetricCard 
+          label="Task Completion"
+          value={parseFloat(taskCompletionRate)}
+          target={80}
+          suffix="%"
+        />
+        <MetricCard 
+          label="Total Contacts"
+          value={totalContacts}
+          target={50}
+        />
+      </div>
+      
+      {/* Additional KPI Row */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <MetricCard 
           label="Conversion Rate"
           value={parseFloat(conversionRate)}
@@ -343,6 +420,16 @@ export default function MetricsTab() {
           value={parseFloat(avgOrderValue)}
           target={50}
           prefix="$"
+        />
+        <MetricCard 
+          label="Tasks Completed"
+          value={completedTasks}
+          target={totalTasks}
+        />
+        <MetricCard 
+          label="Active Partnerships"
+          value={partnerships.filter(p => p.status === 'active' || p.status === 'signed').length}
+          target={10}
         />
       </div>
 

@@ -46,6 +46,7 @@ export default function TasksTab() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [currentWeek, setCurrentWeek] = useState(null)
   const [currentDay, setCurrentDay] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
   const isMobile = useIsMobile()
 
   const fetchTasks = useCallback(async () => {
@@ -181,8 +182,21 @@ export default function TasksTab() {
     }
   }
 
+  // Filter tasks based on search query
+  const filteredTasks = searchQuery.trim() === '' 
+    ? tasks 
+    : tasks.filter(task => {
+        const searchLower = searchQuery.toLowerCase()
+        return (
+          task.task.toLowerCase().includes(searchLower) ||
+          (task.notes && task.notes.toLowerCase().includes(searchLower)) ||
+          task.priority.toLowerCase().includes(searchLower) ||
+          task.status.toLowerCase().includes(searchLower)
+        )
+      })
+
   // Group tasks by week and day
-  const groupedTasks = tasks.reduce((acc, task) => {
+  const groupedTasks = filteredTasks.reduce((acc, task) => {
     const week = task.week || 0
     const day = task.day || 'Unassigned'
     
@@ -462,9 +476,36 @@ export default function TasksTab() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-6 gap-4">
         <h2 className="text-2xl md:text-3xl font-bold text-gray-900">Launch Tasks & Timeline</h2>
-        <div className="flex items-center gap-2 md:gap-4">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-4">
+          <div className="relative">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search tasks..."
+              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 w-full md:w-64"
+            />
+            <svg 
+              className="absolute left-3 top-2.5 w-5 h-5 text-gray-400"
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
           {!isMobile && (
             <Button
               variant="secondary"
@@ -484,11 +525,43 @@ export default function TasksTab() {
         </div>
       </div>
 
-      {weeks.map((week) => (
-        <div key={week.number} className="mb-8">
-          <div className="bg-gradient-to-r from-green-700 to-green-600 text-white p-5 rounded-xl mb-4 shadow-md">
-            <h3 className="text-xl font-bold">{week.title}</h3>
-          </div>
+      {/* Search Results Summary */}
+      {searchQuery && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+          <p className="text-sm text-green-800">
+            Found <span className="font-semibold">{filteredTasks.length}</span> task{filteredTasks.length !== 1 ? 's' : ''} matching "{searchQuery}"
+          </p>
+        </div>
+      )}
+
+      {weeks.map((week) => {
+        // Calculate week progress
+        const weekTasks = Object.values(groupedTasks[week.number] || {}).flat()
+        const weekCompleted = weekTasks.filter(t => t.completed).length
+        const weekTotal = weekTasks.length
+        const weekProgress = weekTotal > 0 ? ((weekCompleted / weekTotal) * 100).toFixed(0) : 0
+        
+        return (
+          <div key={week.number} className="mb-8">
+            <div className="bg-gradient-to-r from-green-700 to-green-600 text-white p-5 rounded-xl mb-4 shadow-md">
+              <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2">
+                <h3 className="text-lg md:text-xl font-bold">{week.title}</h3>
+                {weekTotal > 0 && (
+                  <div className="flex items-center gap-2 md:gap-3">
+                    <span className="text-xs md:text-sm opacity-90">
+                      {weekCompleted}/{weekTotal} tasks
+                    </span>
+                    <div className="bg-white/20 rounded-full h-2 w-24 md:w-32">
+                      <div 
+                        className="bg-white rounded-full h-2 transition-all duration-500"
+                        style={{ width: `${weekProgress}%` }}
+                      />
+                    </div>
+                    <span className="text-xs md:text-sm font-semibold">{weekProgress}%</span>
+                  </div>
+                )}
+              </div>
+            </div>
 
           {Object.entries(groupedTasks[week.number] || {}).map(([day, dayTasks]) => (
             <div key={day} className="bg-white p-4 md:p-6 mb-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
@@ -561,8 +634,9 @@ export default function TasksTab() {
               </div>
             </div>
           )}
-        </div>
-      ))}
+          </div>
+        )
+      })}
       
       {/* CSV Upload Modal */}
       <CSVUploadModal

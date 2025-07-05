@@ -63,7 +63,20 @@ export default function TasksTab() {
   const [currentWeek, setCurrentWeek] = useState(null)
   const [currentDay, setCurrentDay] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [activeId, setActiveId] = useState(null)
   const isMobile = useIsMobile()
+  
+  // Setup drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
 
   const fetchTasks = useCallback(async () => {
     try {
@@ -71,6 +84,8 @@ export default function TasksTab() {
         .from('tasks')
         .select('*')
         .order('week', { ascending: true })
+        .order('day', { ascending: true })
+        .order('position', { ascending: true })
         .order('created_at', { ascending: true })
 
       if (error) throw error
